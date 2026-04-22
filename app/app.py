@@ -12,11 +12,20 @@ Event2: {event2}
 Priority: {priority}
 Email: {email}
 
-What should you do?
+Give:
+1. Decision
+2. Reason
+3. Reply
 """
 
-    result = generator(prompt, max_length=120)[0]["generated_text"]
-    return result
+    result = generator(
+        prompt,
+        max_length=150,
+        do_sample=True,
+        temperature=0.7
+    )[0]["generated_text"]
+
+    return result.replace(prompt, "")
 
 demo = gr.Interface(
     fn=assistant,
@@ -27,7 +36,8 @@ demo = gr.Interface(
         gr.Textbox(label="Email")
     ],
     outputs="text",
-    title="LifeOS AI Assistant"
+    title="LifeOS AI Assistant",
+    description="AI that resolves life conflicts intelligently"
 )
 
 if __name__ == "__main__":
