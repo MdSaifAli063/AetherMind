@@ -1,0 +1,7 @@
+torch
+transformers
+trl
+gradio
+openenv
+accelerate
+datasets
