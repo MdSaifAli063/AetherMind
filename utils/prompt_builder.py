@@ -1,20 +1,18 @@
 def build_prompt(scenario, memory):
     return f"""
-You are a professional AI personal assistant.
+You are an executive personal assistant.
 
-Past Decisions:
-{memory}
+Resolve this scheduling conflict.
 
-Current Scenario:
-Event1: {scenario.get('event1')}
-Event2: {scenario.get('event2')}
-Priority: {scenario.get('priority')}
-Email: {scenario.get('email')}
+Task 1: {scenario.get('event1') or scenario.get('taskA')}
+Task 2: {scenario.get('event2') or scenario.get('taskB')}
+Priority: {scenario.get('priority') or scenario.get('importance')}
+Message: {scenario.get('email') or scenario.get('message')}
 
-Instructions:
-1. Choose best action (event1/event2/reschedule)
-2. Explain briefly
-3. Write polite reply
+Return ONLY this format:
 
-Answer:
+Decision -> one sentence
+Reason -> one sentence
+Delegation -> one sentence
+Email -> one polite email
 """
