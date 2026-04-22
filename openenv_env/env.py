@@ -17,8 +17,9 @@ class LifeOSEnv:
     def step(self, action):
         reward = reward_function(action, self.current)
 
-        # store in memory
         self.memory.add(self.current, action)
 
         done = True
-        return self.state, reward, done, {}
+        info = {"scenario": self.current, "action": action}
+
+        return self.state, reward, done, info
