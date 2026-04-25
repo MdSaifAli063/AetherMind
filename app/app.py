@@ -57,6 +57,7 @@ _model = None
 _model_load_error = None
 _history = []
 _reward_cache = None
+_feedback_log = []
 
 
 def _load_reward_artifacts():
@@ -276,6 +277,168 @@ Shared goal: {shared_goal}
     )
 
 
+def run_whatif_simulation(scenario, options):
+    """Return risk/benefit style outcomes for each proposed option."""
+    risk_words = {"delay", "cancel", "ignore", "escalate", "urgent", "late", "miss"}
+    benefit_words = {"delegate", "plan", "notify", "align", "reschedule", "prepare", "clarify"}
+    results = []
+
+    for idx, option in enumerate(options, start=1):
+        option_text = str(option or "").strip()
+        if not option_text:
+            continue
+        lowered = option_text.lower()
+        risk_score = sum(1 for word in risk_words if word in lowered)
+        benefit_score = sum(1 for word in benefit_words if word in lowered)
+
+        # Keep outcome scores bounded and understandable for UI.
+        risk_pct = min(95, 25 + risk_score * 14)
+        benefit_pct = min(95, 30 + benefit_score * 16)
+        net_score = max(0, min(100, 50 + (benefit_score - risk_score) * 12))
+
+        if net_score >= 70:
+            recommendation = "strong_candidate"
+        elif net_score >= 50:
+            recommendation = "balanced_option"
+        else:
+            recommendation = "high_caution"
+
+        results.append({
+            "option_id": idx,
+            "option": option_text,
+            "risk_pct": risk_pct,
+            "benefit_pct": benefit_pct,
+            "net_score": net_score,
+            "recommendation": recommendation,
+            "impact_note": (
+                f"Scenario context: {scenario}. "
+                f"Option favors {('execution speed' if benefit_score >= risk_score else 'risk containment')}."
+            )
+        })
+
+    ranked = sorted(results, key=lambda item: item["net_score"], reverse=True)
+    return {
+        "scenario": scenario,
+        "evaluated_options": len(ranked),
+        "ranked_outcomes": ranked,
+        "best_option": ranked[0] if ranked else None
+    }
+
+
+def generate_communication_script(audience, objective, tone, context, llm_level="advanced"):
+    prompt = f"""
+You are an expert communication strategist.
+Generate a concise communication script.
+
+Return ONLY this format:
+Opening: ...
+Core Message:
+1) ...
+2) ...
+3) ...
+Close: ...
+Fallback One-Liner: ...
+
+Audience: {audience}
+Objective: {objective}
+Tone: {tone}
+Context: {context}
+"""
+    generated = run_generation(prompt, max_new_tokens=170, llm_level=llm_level)
+    if generated and "Opening:" in generated:
+        return generated[generated.find("Opening:"):].strip()
+
+    return (
+        f"Opening: Hi {audience}, I want to align quickly on this.\n"
+        "Core Message:\n"
+        f"1) Objective: {objective}\n"
+        f"2) Context: {context}\n"
+        "3) Proposed next step: agree on owner, deadline, and check-in.\n"
+        f"Close: I appreciate your support and feedback. Tone target: {tone}.\n"
+        f"Fallback One-Liner: Sharing a quick update to align on {objective}."
+    )
+
+
+def ethical_decision_assessment(decision, context):
+    text = f"{decision} {context}".lower()
+    dimensions = {
+        "fairness": 80,
+        "privacy": 80,
+        "safety": 80,
+        "transparency": 80,
+        "autonomy": 80
+    }
+    penalties = {
+        "fairness": ["bias", "favor", "exclude"],
+        "privacy": ["share data", "leak", "expose", "private"],
+        "safety": ["unsafe", "harm", "danger"],
+        "transparency": ["hide", "secret", "undisclosed"],
+        "autonomy": ["force", "coerce", "manipulate"]
+    }
+
+    triggered_flags = []
+    for dimension, words in penalties.items():
+        for word in words:
+            if word in text:
+                dimensions[dimension] = max(0, dimensions[dimension] - 30)
+                triggered_flags.append(f"{dimension}:{word}")
+
+    overall_score = round(sum(dimensions.values()) / len(dimensions), 2)
+    if overall_score >= 75:
+        verdict = "approved_with_monitoring"
+    elif overall_score >= 55:
+        verdict = "needs_revision"
+    else:
+        verdict = "high_ethical_risk"
+
+    suggestions = [
+        "Document the reasoning and trade-offs before execution.",
+        "Notify affected stakeholders with clear rationale.",
+        "Add a rollback or corrective action if unintended harm appears."
+    ]
+    return {
+        "decision": decision,
+        "context": context,
+        "scores": dimensions,
+        "overall_score": overall_score,
+        "verdict": verdict,
+        "flags": triggered_flags,
+        "suggestions": suggestions
+    }
+
+
+def update_feedback_loop(action, outcome, rating, feedback_text):
+    rating_value = max(-2.0, min(2.0, float(rating)))
+    record = {
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "action": action,
+        "outcome": outcome,
+        "rating": rating_value,
+        "feedback": feedback_text
+    }
+    _feedback_log.append(record)
+    if len(_feedback_log) > 300:
+        _feedback_log.pop(0)
+
+    avg_rating = round(sum(item["rating"] for item in _feedback_log) / len(_feedback_log), 3)
+    trend = "improving" if avg_rating >= 0.5 else ("stable" if avg_rating >= -0.25 else "declining")
+    reinforcement_plan = (
+        "Increase policy weight for this action pattern."
+        if rating_value >= 1
+        else "Keep current policy and gather more evidence."
+        if rating_value >= 0
+        else "Reduce confidence in this action and require extra checks."
+    )
+    return {
+        "saved": True,
+        "entries": len(_feedback_log),
+        "avg_rating": avg_rating,
+        "trend": trend,
+        "reinforcement_plan": reinforcement_plan,
+        "latest": record
+    }
+
+
 # ----------------------------------
 # AI Logic
 # ----------------------------------
@@ -369,7 +532,7 @@ def home():
 <html>
 <head>
 <meta charset="UTF-8">
-<title>LifeOS v2</title>
+<title>AetherMind</title>
 
 <style>
 
@@ -881,7 +1044,7 @@ min-height:68vh;
 <div class="app-shell">
   <aside class="app-sidebar">
     <div>
-      <div class="app-logo">LifeOS v2</div>
+      <div class="app-logo">🧠 AetherMind</div>
       <div class="app-sub">Multi-agent conflict intelligence workspace</div>
     </div>
 
@@ -1430,6 +1593,92 @@ def api_agent_capabilities():
     })
 
 
+@app.route("/api/whatif-simulate", methods=["POST"])
+def api_whatif_simulate():
+    data = request.get_json(silent=True) or {}
+    scenario = str(data.get("scenario", "")).strip()
+    options = data.get("options", [])
+    if not scenario:
+        return jsonify({"error": "scenario is required"}), 400
+    if isinstance(options, str):
+        options = [part.strip() for part in options.split("\n") if part.strip()]
+    if not isinstance(options, list) or not options:
+        return jsonify({"error": "options must be a non-empty list or newline string"}), 400
+
+    result = run_whatif_simulation(scenario, options)
+    return jsonify(result)
+
+
+@app.route("/api/communication-script", methods=["POST"])
+def api_communication_script():
+    data = request.get_json(silent=True) or {}
+    audience = str(data.get("audience", "")).strip()
+    objective = str(data.get("objective", "")).strip()
+    tone = str(data.get("tone", "calm")).strip() or "calm"
+    context = str(data.get("context", "")).strip()
+    llm_level = str(data.get("llm_level", "advanced")).strip() or "advanced"
+    if not audience or not objective or not context:
+        return jsonify({"error": "audience, objective, and context are required"}), 400
+
+    script = generate_communication_script(audience, objective, tone, context, llm_level=llm_level)
+    return jsonify({
+        "audience": audience,
+        "objective": objective,
+        "tone": tone,
+        "script": script
+    })
+
+
+@app.route("/api/ethical-filter", methods=["POST"])
+def api_ethical_filter():
+    data = request.get_json(silent=True) or {}
+    decision = str(data.get("decision", "")).strip()
+    context = str(data.get("context", "")).strip()
+    if not decision:
+        return jsonify({"error": "decision is required"}), 400
+
+    report = ethical_decision_assessment(decision, context)
+    return jsonify(report)
+
+
+@app.route("/api/feedback-loop", methods=["POST"])
+def api_feedback_loop():
+    data = request.get_json(silent=True) or {}
+    action = str(data.get("action", "")).strip()
+    outcome = str(data.get("outcome", "")).strip()
+    feedback_text = str(data.get("feedback", "")).strip()
+    rating_raw = data.get("rating", 0)
+
+    if not action or not outcome:
+        return jsonify({"error": "action and outcome are required"}), 400
+    try:
+        rating = float(rating_raw)
+    except Exception:
+        return jsonify({"error": "rating must be numeric"}), 400
+
+    summary = update_feedback_loop(action, outcome, rating, feedback_text)
+    return jsonify(summary)
+
+
+@app.route("/api/feedback-loop/summary", methods=["GET"])
+def api_feedback_loop_summary():
+    if not _feedback_log:
+        return jsonify({
+            "entries": 0,
+            "avg_rating": 0.0,
+            "trend": "no_data",
+            "recent": []
+        })
+    avg_rating = round(sum(item["rating"] for item in _feedback_log) / len(_feedback_log), 3)
+    trend = "improving" if avg_rating >= 0.5 else ("stable" if avg_rating >= -0.25 else "declining")
+    return jsonify({
+        "entries": len(_feedback_log),
+        "avg_rating": avg_rating,
+        "trend": trend,
+        "recent": _feedback_log[-8:]
+    })
+
+
 # ----------------------------------
 # OpenEnv Innovation Dashboard
 # ----------------------------------
@@ -1768,7 +2017,7 @@ new Chart(document.getElementById('rewardChart'), {
     
     html += """
 <div style="text-align:center; padding:40px; opacity:0.6; font-size:14px;">
-    <p>OpenEnv Innovation Dashboard • Powered by LifeOS v2</p>
+    <p>OpenEnv Innovation Dashboard • Powered by AetherMind</p>
 </div>
 </body>
 </html>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LifeOS v2 Dashboard</title>
+    <title>AetherMind Dashboard</title>
     <style>
         :root {
             --bg-0: #070c24;
@@ -73,24 +73,20 @@
             border-bottom: 1px solid rgba(105, 122, 186, 0.2);
         }
 
-        .brand-mark {
-            width: 42px;
-            height: 38px;
-            border-radius: 8px;
-            border: 1px solid rgba(57, 141, 238, 0.35);
-            background: linear-gradient(145deg, rgba(7, 21, 61, 0.86), rgba(16, 31, 81, 0.62));
-            display: grid;
-            place-items: center;
-            font-size: 18px;
-            color: #32c4ff;
-            text-shadow: 0 0 8px rgba(42, 201, 255, 0.4);
-        }
-
         .brand h1 {
             font-size: 33px;
             font-weight: 600;
             letter-spacing: 0;
             line-height: 1.05;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .brand-brain {
+            color: #2ecbff;
+            text-shadow: 0 0 10px rgba(46, 203, 255, 0.5);
+            font-size: 24px;
         }
 
         .brand p {
@@ -236,10 +232,6 @@
             line-height: 1;
         }
 
-        .brand-mark .bi {
-            font-size: 24px;
-        }
-
         .promo-twinkle {
             position: absolute;
             color: #bd8eff;
@@ -279,14 +271,16 @@
             flex-direction: column;
             gap: 12px;
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            position: relative;
         }
 
         .topbar {
             display: flex;
-            justify-content: space-between;
+            justify-content: flex-end;
             align-items: flex-start;
             gap: 12px;
-            padding: 4px 6px 8px;
+            padding: 0 6px 2px;
+            position: static;
         }
 
         .title h2 {
@@ -304,6 +298,8 @@
         .status-row {
             display: flex;
             gap: 8px;
+            width: 100%;
+            margin-left: 0;
         }
 
         .chip {
@@ -311,7 +307,11 @@
             border: 1px solid var(--border);
             border-radius: 10px;
             padding: 11px 13px;
-            min-width: 126px;
+            width: 160px;
+            min-height: 68px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
 
         .chip-label {
@@ -323,6 +323,19 @@
         .chip-value {
             font-size: 14px;
             font-weight: 600;
+        }
+
+        .chip-about {
+            flex: 1;
+            width: auto;
+            min-width: 0;
+        }
+
+        .chip-about .chip-value {
+            font-size: 12px;
+            line-height: 1.3;
+            font-weight: 500;
+            color: #dbe5ff;
         }
 
         .dot {
@@ -339,6 +352,7 @@
             display: grid;
             grid-template-columns: 1.12fr 1.35fr 1.03fr;
             gap: 10px;
+            margin-top: 0;
         }
 
         .card {
@@ -418,11 +432,36 @@
             position: relative;
             display: grid;
             place-items: center;
-            min-height: 288px;
+            min-height: 322px;
             border-radius: 14px;
             background:
-                radial-gradient(circle at center, rgba(47, 132, 255, 0.18), rgba(19, 27, 62, 0.18) 46%, transparent 72%);
+                radial-gradient(circle at center, rgba(47, 132, 255, 0.22), rgba(19, 27, 62, 0.2) 46%, transparent 72%);
             overflow: hidden;
+            perspective: 800px;
+        }
+
+        .agent-ring::before,
+        .agent-ring::after {
+            content: "";
+            position: absolute;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .agent-ring::before {
+            width: 320px;
+            height: 320px;
+            background: radial-gradient(circle, rgba(73, 157, 255, 0.15) 0%, rgba(73, 157, 255, 0) 70%);
+            animation: aura-breathe 3.2s ease-in-out infinite;
+        }
+
+        .agent-ring::after {
+            width: 220px;
+            height: 220px;
+            border: 1px solid rgba(116, 175, 255, 0.28);
+            box-shadow: 0 0 22px rgba(116, 175, 255, 0.22);
+            animation: core-ripple 2.8s ease-out infinite;
         }
 
         .ring-core,
@@ -431,50 +470,106 @@
             position: absolute;
             border-radius: 50%;
             border: 1px solid rgba(108, 122, 210, 0.25);
+            transform-style: preserve-3d;
         }
 
         .ring-core {
-            width: 188px;
-            height: 188px;
+            width: 198px;
+            height: 198px;
             border-color: rgba(106, 131, 239, 0.42);
             box-shadow: 0 0 22px rgba(67, 104, 255, 0.18);
+            animation: spin-ring 16s linear infinite;
         }
 
         .ring-mid {
-            width: 228px;
-            height: 228px;
+            width: 246px;
+            height: 246px;
             border-style: dashed;
             border-color: rgba(106, 131, 239, 0.35);
+            animation: spin-ring-reverse 24s linear infinite;
         }
 
         .ring-outer {
-            width: 266px;
-            height: 266px;
+            width: 286px;
+            height: 286px;
             border-color: rgba(74, 99, 188, 0.28);
+            animation: spin-ring 32s linear infinite;
         }
 
         .brain-core {
-            width: 138px;
-            height: 138px;
+            width: 148px;
+            height: 148px;
             border-radius: 50%;
             background:
                 radial-gradient(circle at 32% 30%, rgba(48, 212, 255, 0.8), rgba(87, 78, 255, 0.68) 48%, rgba(181, 61, 255, 0.42));
-            box-shadow: 0 0 30px rgba(31, 200, 255, 0.3);
+            box-shadow: 0 0 34px rgba(31, 200, 255, 0.35), inset 0 -12px 24px rgba(14, 20, 54, 0.35);
             display: grid;
             place-items: center;
-            font-size: 58px;
+            font-size: 62px;
             z-index: 5;
+            transform: translateZ(12px);
+            animation: float-brain 3.8s ease-in-out infinite;
         }
+
+        .neural-spark {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background: #9fdcff;
+            box-shadow: 0 0 9px rgba(159, 220, 255, 0.9);
+            z-index: 3;
+            opacity: 0.7;
+            animation: spark-float 4.5s linear infinite;
+        }
+
+        .spark-1 { left: 24%; top: 18%; animation-delay: 0.2s; }
+        .spark-2 { left: 38%; top: 8%; animation-delay: 0.8s; }
+        .spark-3 { left: 62%; top: 10%; animation-delay: 1.3s; }
+        .spark-4 { right: 20%; top: 20%; animation-delay: 1.8s; }
+        .spark-5 { left: 14%; top: 46%; animation-delay: 2.2s; }
+        .spark-6 { right: 12%; top: 48%; animation-delay: 2.8s; }
+        .spark-7 { left: 20%; bottom: 22%; animation-delay: 3.2s; }
+        .spark-8 { right: 18%; bottom: 18%; animation-delay: 3.7s; }
+        .spark-9 { left: 50%; bottom: 10%; animation-delay: 4.1s; }
 
         .agent-node {
             position: absolute;
             display: flex;
             align-items: flex-start;
             gap: 8px;
-            width: 124px;
+            width: 132px;
             font-size: 11px;
             color: var(--text-2);
             z-index: 6;
+            animation: node-pulse 2.8s ease-in-out infinite;
+        }
+
+        .connector {
+            position: absolute;
+            height: 2px;
+            background: linear-gradient(90deg, rgba(112, 170, 255, 0.15), rgba(112, 170, 255, 0.85), rgba(112, 170, 255, 0.12));
+            box-shadow: 0 0 10px rgba(92, 162, 255, 0.35);
+            border-radius: 999px;
+            transform-origin: left center;
+            z-index: 4;
+            opacity: 0.9;
+            animation: connector-flow 2.4s ease-in-out infinite;
+            overflow: visible;
+        }
+
+        .connector::after {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: -8px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            transform: translateY(-50%);
+            background: radial-gradient(circle at 35% 35%, #c9f2ff 0%, #7fd7ff 42%, rgba(127, 215, 255, 0.1) 100%);
+            box-shadow: 0 0 10px rgba(127, 215, 255, 0.95), 0 0 18px rgba(98, 166, 255, 0.45);
+            animation: particle-travel 2s linear infinite;
         }
 
         .node-icon {
@@ -496,6 +591,10 @@
         .node-conflict { color: #ff6ba6; border-color: rgba(255, 107, 166, 0.58); background: rgba(73, 18, 47, 0.85); }
         .node-email { color: #bd83ff; border-color: rgba(189, 131, 255, 0.62); background: rgba(50, 23, 73, 0.85); }
         .node-memory { color: #35d2ff; border-color: rgba(53, 210, 255, 0.62); background: rgba(12, 45, 78, 0.85); }
+        .node-whatif { color: #9ad6ff; border-color: rgba(112, 202, 255, 0.62); background: rgba(18, 41, 76, 0.85); }
+        .node-script-icon { color: #ffd58a; border-color: rgba(255, 213, 138, 0.62); background: rgba(63, 43, 12, 0.85); }
+        .node-ethics { color: #8bffbf; border-color: rgba(139, 255, 191, 0.62); background: rgba(12, 56, 44, 0.85); }
+        .node-feedback { color: #ff9bd4; border-color: rgba(255, 155, 212, 0.62); background: rgba(73, 22, 56, 0.85); }
 
         .agent-node b {
             color: var(--text-1);
@@ -513,11 +612,100 @@
             display: block;
         }
 
-        .node-cal { top: 42px; left: 14px; }
-        .node-del { top: 42px; right: 12px; }
-        .node-con { bottom: 58px; left: 8px; }
-        .node-em { bottom: 58px; right: 8px; }
-        .node-mem { bottom: 16px; left: 50%; transform: translateX(-50%); }
+        .node-cal { top: 14px; left: 18px; animation-delay: 0s; }
+        .node-del { top: 14px; right: 18px; animation-delay: 0.2s; }
+        .node-con { top: 102px; left: 2px; animation-delay: 0.4s; }
+        .node-em { top: 118px; right: 2px; animation-delay: 0.6s; }
+        .node-mem { bottom: 12px; left: 50%; transform: translateX(-50%); animation-delay: 0.8s; }
+        .node-what { bottom: 88px; left: 16px; animation-delay: 1s; }
+        .node-script { bottom: 112px; right: 16px; animation-delay: 1.2s; }
+        .node-eth { top: 66px; left: 50%; transform: translateX(-50%); animation-delay: 1.4s; }
+        .node-feed { bottom: 58px; left: 50%; transform: translateX(-50%); animation-delay: 1.6s; }
+
+        .conn-cal { width: 88px; left: 120px; top: 88px; transform: rotate(24deg); animation-delay: 0.1s; }
+        .conn-del { width: 88px; right: 120px; top: 88px; transform: rotate(-24deg); animation-delay: 0.3s; }
+        .conn-con { width: 96px; left: 108px; top: 150px; transform: rotate(-14deg); animation-delay: 0.5s; }
+        .conn-em { width: 92px; right: 108px; top: 164px; transform: rotate(12deg); animation-delay: 0.7s; }
+        .conn-mem { width: 82px; left: 50%; top: 250px; transform: translateX(-50%) rotate(90deg); animation-delay: 0.9s; }
+        .conn-what { width: 90px; left: 112px; top: 226px; transform: rotate(-35deg); animation-delay: 1.1s; }
+        .conn-script { width: 86px; right: 112px; top: 212px; transform: rotate(30deg); animation-delay: 1.3s; }
+        .conn-eth { width: 68px; left: 50%; top: 108px; transform: translateX(-50%) rotate(90deg); animation-delay: 1.5s; }
+        .conn-feed { width: 66px; left: 50%; top: 220px; transform: translateX(-50%) rotate(90deg); animation-delay: 1.7s; }
+        .conn-cal::after { animation-delay: 0.05s; }
+        .conn-del::after { animation-delay: 0.25s; }
+        .conn-con::after { animation-delay: 0.45s; }
+        .conn-em::after { animation-delay: 0.65s; }
+        .conn-mem::after { animation-delay: 0.85s; }
+        .conn-what::after { animation-delay: 1.05s; }
+        .conn-script::after { animation-delay: 1.25s; }
+        .conn-eth::after { animation-delay: 1.45s; }
+        .conn-feed::after { animation-delay: 1.65s; }
+
+        @keyframes spin-ring {
+            from { transform: rotateX(65deg) rotateZ(0deg); }
+            to { transform: rotateX(65deg) rotateZ(360deg); }
+        }
+
+        @keyframes spin-ring-reverse {
+            from { transform: rotateX(65deg) rotateZ(360deg); }
+            to { transform: rotateX(65deg) rotateZ(0deg); }
+        }
+
+        @keyframes float-brain {
+            0%, 100% { transform: translateZ(12px) translateY(0); }
+            50% { transform: translateZ(22px) translateY(-6px); }
+        }
+
+        @keyframes node-pulse {
+            0%, 100% { opacity: 0.88; transform: translateY(0); }
+            50% { opacity: 1; transform: translateY(-3px); }
+        }
+
+        @keyframes connector-flow {
+            0%, 100% {
+                opacity: 0.45;
+                filter: brightness(0.95);
+            }
+            50% {
+                opacity: 1;
+                filter: brightness(1.2);
+            }
+        }
+
+        @keyframes particle-travel {
+            0% {
+                left: -8px;
+                opacity: 0.15;
+                transform: translateY(-50%) scale(0.7);
+            }
+            20% {
+                opacity: 1;
+            }
+            100% {
+                left: calc(100% - 2px);
+                opacity: 0.2;
+                transform: translateY(-50%) scale(1);
+            }
+        }
+
+        @keyframes aura-breathe {
+            0%, 100% { transform: scale(0.94); opacity: 0.58; }
+            50% { transform: scale(1.04); opacity: 0.9; }
+        }
+
+        @keyframes core-ripple {
+            0% { transform: scale(0.78); opacity: 0.6; }
+            75% { transform: scale(1.15); opacity: 0.05; }
+            100% { transform: scale(1.22); opacity: 0; }
+        }
+
+        @keyframes spark-float {
+            0% { transform: translate3d(0, 0, 0) scale(0.8); opacity: 0; }
+            20% { opacity: 0.9; }
+            50% { transform: translate3d(6px, -10px, 0) scale(1); opacity: 0.7; }
+            80% { opacity: 0.4; }
+            100% { transform: translate3d(-5px, -18px, 0) scale(0.75); opacity: 0; }
+        }
 
         .mini-chip {
             border: 1px solid rgba(181, 61, 255, 0.45);
@@ -585,6 +773,7 @@
             display: grid;
             gap: 12px;
             grid-template-rows: 1fr 1fr 1fr 1fr;
+            margin-top: 0;
         }
 
         .list {
@@ -645,6 +834,13 @@
 
         .grid-bottom .card {
             min-height: 292px;
+        }
+
+        .api-status-card {
+            min-height: 170px !important;
+            height: fit-content;
+            align-self: start;
+            margin-top: 0;
         }
 
         .cap-item {
@@ -729,6 +925,7 @@
             gap: 10px;
             margin-top: 10px;
         }
+
 
         .page-view {
             display: none;
@@ -875,11 +1072,18 @@
 
             .main {
                 order: 1;
+                padding: 12px;
             }
 
             .status-row {
                 flex-wrap: wrap;
                 justify-content: flex-end;
+                margin-left: 0;
+            }
+
+            .topbar {
+                position: static;
+                padding: 4px 6px 8px;
             }
 
             .title h2 {
@@ -905,12 +1109,6 @@
                 width: 16px;
             }
 
-            .brand-mark {
-                width: 36px;
-                height: 36px;
-                font-size: 18px;
-            }
-
             .promo-card {
                 min-height: 120px;
                 padding: 12px;
@@ -922,9 +1120,8 @@
     <div class="app-shell">
         <aside class="sidebar">
             <div class="brand">
-                <div class="brand-mark">◎</div>
                 <div>
-                    <h1>LifeOS v2</h1>
+                    <h1><span class="brand-brain">🧠</span>AetherMind</h1>
                     <p>Personal Conflict Resolution Agent</p>
                 </div>
             </div>
@@ -935,6 +1132,10 @@
                 <button class="menu-btn" data-page="emotion"><span class="menu-ico">◉</span>Emotion Detection</button>
                 <button class="menu-btn" data-page="rewriter"><span class="menu-ico">✎</span>Response Rewriter</button>
                 <button class="menu-btn" data-page="mediation"><span class="menu-ico">⎇</span>Mediation Mode</button>
+                <button class="menu-btn" data-page="whatif"><span class="menu-ico">◈</span>What-If Simulation</button>
+                <button class="menu-btn" data-page="script"><span class="menu-ico">✦</span>Script Generator</button>
+                <button class="menu-btn" data-page="ethics"><span class="menu-ico">⚖</span>Ethical Filter</button>
+                <button class="menu-btn" data-page="feedback"><span class="menu-ico">↺</span>Feedback Loop</button>
                 <button class="menu-btn" data-page="history"><span class="menu-ico">◷</span>Conflict History</button>
             </div>
             <div class="menu-divider"></div>
@@ -943,13 +1144,17 @@
         <main class="main">
             <div class="topbar">
                 <div class="status-row">
+                    <div class="chip chip-about">
+                        <div class="chip-label">About</div>
+                        <div class="chip-value">AetherMind is an AI conflict-resolution agent for personal tasks, communication, and smart decisions.</div>
+                    </div>
                     <div class="chip">
                         <div class="chip-label">Agent Status</div>
                         <div class="chip-value">Active <span class="dot"></span></div>
                     </div>
                     <div class="chip">
                         <div class="chip-label">Model</div>
-                        <div class="chip-value">LifeOS v2.1</div>
+                        <div class="chip-value">AetherMind</div>
                     </div>
                 </div>
             </div>
@@ -984,12 +1189,30 @@
 
                 <article class="card reasoning-wrap">
                     <div>
-                        <div class="title-row"><h3>LifeOS Reasoning Engine</h3><span class="mini-chip">Analyzing</span></div>
+                        <div class="title-row"><h3>AetherMind Reasoning Engine</h3><span class="mini-chip">Analyzing</span></div>
                         <p class="card-note">Multi-agent decision analysis in progress...</p>
                         <div class="agent-ring">
                             <div class="ring-outer"></div>
                             <div class="ring-mid"></div>
                             <div class="ring-core"></div>
+                            <span class="neural-spark spark-1"></span>
+                            <span class="neural-spark spark-2"></span>
+                            <span class="neural-spark spark-3"></span>
+                            <span class="neural-spark spark-4"></span>
+                            <span class="neural-spark spark-5"></span>
+                            <span class="neural-spark spark-6"></span>
+                            <span class="neural-spark spark-7"></span>
+                            <span class="neural-spark spark-8"></span>
+                            <span class="neural-spark spark-9"></span>
+                            <div class="connector conn-cal"></div>
+                            <div class="connector conn-del"></div>
+                            <div class="connector conn-con"></div>
+                            <div class="connector conn-em"></div>
+                            <div class="connector conn-mem"></div>
+                            <div class="connector conn-what"></div>
+                            <div class="connector conn-script"></div>
+                            <div class="connector conn-eth"></div>
+                            <div class="connector conn-feed"></div>
 
                             <div class="agent-node node-cal">
                                 <span class="node-icon node-calendar">◷</span>
@@ -1010,6 +1233,22 @@
                             <div class="agent-node node-mem">
                                 <span class="node-icon node-memory">◎</span>
                                 <div><b>Memory Agent</b><small id="node-mem-status">Recalling preferences</small></div>
+                            </div>
+                            <div class="agent-node node-what">
+                                <span class="node-icon node-whatif">◈</span>
+                                <div><b>What-If Simulator</b><small id="node-what-status">Evaluating outcomes</small></div>
+                            </div>
+                            <div class="agent-node node-script">
+                                <span class="node-icon node-script-icon">✦</span>
+                                <div><b>Script Generator</b><small id="node-script-status">Drafting communication</small></div>
+                            </div>
+                            <div class="agent-node node-eth">
+                                <span class="node-icon node-ethics">⚖</span>
+                                <div><b>Ethical Filter</b><small id="node-eth-status">Validating decision safety</small></div>
+                            </div>
+                            <div class="agent-node node-feed">
+                                <span class="node-icon node-feedback">↺</span>
+                                <div><b>Feedback Loop</b><small id="node-feed-status">Learning from outcomes</small></div>
                             </div>
                             <div class="brain-core">🧠</div>
                         </div>
@@ -1079,7 +1318,7 @@
                     </div>
                 </article>
 
-                <article class="card">
+                <article class="card api-status-card">
                     <h3>Live API Status</h3>
                     <div id="healthOutput" class="output-area compact">Checking backend health...</div>
                 </article>
@@ -1205,6 +1444,79 @@
                     </article>
                 </section>
             </div>
+
+            <div id="page-whatif" class="page-view">
+                <section class="single-page-grid">
+                    <article class="card">
+                        <h3>What-If Simulation Mode</h3>
+                        <p class="card-note">Compare possible options with risk and benefit scoring.</p>
+                        <div class="field"><label>Scenario</label><textarea id="whatIfScenario">Dinner conflict with an urgent investor review at the same time.</textarea></div>
+                        <div class="field"><label>Options (one per line)</label><textarea id="whatIfOptions">Delegate investor prep to teammate
+Join dinner and send summary later
+Reschedule dinner by one hour with apology</textarea></div>
+                        <button class="btn-primary" id="whatIfBtn">Run Simulation</button>
+                    </article>
+                    <article class="card">
+                        <h3>Simulation Outcome</h3>
+                        <div id="whatIfOutput" class="output-area">Simulation results will appear here...</div>
+                    </article>
+                </section>
+            </div>
+
+            <div id="page-script" class="page-view">
+                <section class="single-page-grid">
+                    <article class="card">
+                        <h3>Communication Script Generator</h3>
+                        <p class="card-note">Generate clear scripts for difficult conversations.</p>
+                        <div class="field"><label>Audience</label><input id="scriptAudience" value="My manager and family group"></div>
+                        <div class="field"><label>Objective</label><input id="scriptObjective" value="Align on revised schedule without conflict"></div>
+                        <div class="field"><label>Tone</label><select id="scriptTone"><option value="calm" selected>Calm</option><option value="formal">Formal</option><option value="empathetic">Empathetic</option></select></div>
+                        <div class="field"><label>Context</label><textarea id="scriptContext">I need to shift one commitment while preserving trust and clarity.</textarea></div>
+                        <button class="btn-primary" id="scriptBtn">Generate Script</button>
+                    </article>
+                    <article class="card">
+                        <h3>Generated Script</h3>
+                        <div id="scriptOutput" class="output-area">Generated communication script will appear here...</div>
+                    </article>
+                </section>
+            </div>
+
+            <div id="page-ethics" class="page-view">
+                <section class="single-page-grid">
+                    <article class="card">
+                        <h3>Ethical Decision Filter</h3>
+                        <p class="card-note">Check fairness, privacy, safety, transparency, and autonomy.</p>
+                        <div class="field"><label>Decision</label><textarea id="ethicsDecision">Share project updates with all stakeholders and delay one private detail until consent is confirmed.</textarea></div>
+                        <div class="field"><label>Context</label><textarea id="ethicsContext">Urgent coordination is needed, but personal details must remain protected.</textarea></div>
+                        <button class="btn-primary" id="ethicsBtn">Run Ethical Check</button>
+                    </article>
+                    <article class="card">
+                        <h3>Ethical Assessment</h3>
+                        <div id="ethicsOutput" class="output-area">Ethical evaluation will appear here...</div>
+                    </article>
+                </section>
+            </div>
+
+            <div id="page-feedback" class="page-view">
+                <section class="single-page-grid">
+                    <article class="card">
+                        <h3>Feedback Reinforcement Loop</h3>
+                        <p class="card-note">Feed outcomes back to improve future decision behavior.</p>
+                        <div class="field"><label>Action Taken</label><input id="feedbackAction" value="Rescheduled investor review and delegated prep"></div>
+                        <div class="field"><label>Observed Outcome</label><textarea id="feedbackOutcome">Conflict reduced and both stakeholders accepted the plan.</textarea></div>
+                        <div class="field"><label>Rating (-2 to 2)</label><input id="feedbackRating" type="number" min="-2" max="2" step="0.5" value="1"></div>
+                        <div class="field"><label>Feedback Notes</label><textarea id="feedbackText">Delegation worked well, but reminder timing can improve.</textarea></div>
+                        <button class="btn-primary" id="feedbackBtn">Submit Feedback</button>
+                    </article>
+                    <article class="card">
+                        <h3>Reinforcement Summary</h3>
+                        <div class="page-actions">
+                            <button class="btn-soft" id="feedbackSummaryBtn">Refresh Summary</button>
+                        </div>
+                        <div id="feedbackOutput" class="output-area">Feedback loop summary will appear here...</div>
+                    </article>
+                </section>
+            </div>
         </main>
     </div>
 
@@ -1242,6 +1554,22 @@
             history: {
                 title: "Conflict History",
                 subtitle: "Review previous resolutions and progress trends."
+            },
+            whatif: {
+                title: "What-If Simulation",
+                subtitle: "Evaluate options with outcome risk-benefit analysis."
+            },
+            script: {
+                title: "Communication Script Generator",
+                subtitle: "Generate calm, audience-aware scripts for difficult situations."
+            },
+            ethics: {
+                title: "Ethical Decision Filter",
+                subtitle: "Validate decisions against core ethical constraints."
+            },
+            feedback: {
+                title: "Feedback Reinforcement Loop",
+                subtitle: "Convert real outcomes into policy learning signals."
             }
         };
 
@@ -1321,6 +1649,14 @@
                     tools.rewrite ? "Rewrite tool activated" : "Drafting response";
                 document.getElementById("node-mem-status").textContent =
                     data.persona?.name ? `Persona: ${data.persona.name}` : "Recalling preferences";
+                document.getElementById("node-what-status").textContent =
+                    workflow.length ? `Scenarios compared: ${Math.max(2, Math.min(5, workflow.length))}` : "Evaluating outcomes";
+                document.getElementById("node-script-status").textContent =
+                    tools.rewrite ? "Communication pattern loaded" : "Drafting communication";
+                document.getElementById("node-eth-status").textContent =
+                    Number(data.total_reward || 0) >= 0 ? "Ethical risk: low/medium" : "Ethical risk: elevated";
+                document.getElementById("node-feed-status").textContent =
+                    data.reward_breakdown ? "Feedback signal captured" : "Learning from outcomes";
 
                 const scenarioTitle = data.scenario?.title || data.scenario?.name || "Conflict scenario";
                 const priority = data.scenario?.priority || data.scenario?.priority_focus || "N/A";
@@ -1575,6 +1911,93 @@
             }
         }
 
+        async function runWhatIfSimulation() {
+            try {
+                const scenario = document.getElementById("whatIfScenario").value;
+                const options = document.getElementById("whatIfOptions").value
+                    .split("\n")
+                    .map(line => line.trim())
+                    .filter(Boolean);
+                const res = await fetch(`${API_BASE}/api/whatif-simulate`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ scenario, options })
+                });
+                const data = await res.json();
+                setOutput("whatIfOutput", asPretty(data));
+            } catch (err) {
+                setOutput("whatIfOutput", `Simulation failed: ${err.message}`);
+            }
+        }
+
+        async function generateCommunicationScriptPage() {
+            try {
+                const payload = {
+                    audience: document.getElementById("scriptAudience").value,
+                    objective: document.getElementById("scriptObjective").value,
+                    tone: document.getElementById("scriptTone").value,
+                    context: document.getElementById("scriptContext").value
+                };
+                const res = await fetch(`${API_BASE}/api/communication-script`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                setOutput("scriptOutput", data.script || asPretty(data));
+            } catch (err) {
+                setOutput("scriptOutput", `Script generation failed: ${err.message}`);
+            }
+        }
+
+        async function runEthicalFilter() {
+            try {
+                const payload = {
+                    decision: document.getElementById("ethicsDecision").value,
+                    context: document.getElementById("ethicsContext").value
+                };
+                const res = await fetch(`${API_BASE}/api/ethical-filter`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                setOutput("ethicsOutput", asPretty(data));
+            } catch (err) {
+                setOutput("ethicsOutput", `Ethical filter failed: ${err.message}`);
+            }
+        }
+
+        async function submitFeedbackLoop() {
+            try {
+                const payload = {
+                    action: document.getElementById("feedbackAction").value,
+                    outcome: document.getElementById("feedbackOutcome").value,
+                    rating: Number(document.getElementById("feedbackRating").value || 0),
+                    feedback: document.getElementById("feedbackText").value
+                };
+                const res = await fetch(`${API_BASE}/api/feedback-loop`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                setOutput("feedbackOutput", asPretty(data));
+            } catch (err) {
+                setOutput("feedbackOutput", `Feedback submission failed: ${err.message}`);
+            }
+        }
+
+        async function loadFeedbackSummary() {
+            try {
+                const res = await fetch(`${API_BASE}/api/feedback-loop/summary`);
+                const data = await res.json();
+                setOutput("feedbackOutput", asPretty(data));
+            } catch (err) {
+                setOutput("feedbackOutput", `Summary load failed: ${err.message}`);
+            }
+        }
+
         async function loadMemoryHints() {
             try {
                 const res = await fetch(`${API_BASE}/api/episode/latest`);
@@ -1654,6 +2077,11 @@
         document.getElementById("mediatePageBtn").addEventListener("click", mediatePage);
         document.getElementById("historyRefreshBtn").addEventListener("click", () => loadHistoryPage(false));
         document.getElementById("historyEpisodesBtn").addEventListener("click", () => loadHistoryPage(true));
+        document.getElementById("whatIfBtn").addEventListener("click", runWhatIfSimulation);
+        document.getElementById("scriptBtn").addEventListener("click", generateCommunicationScriptPage);
+        document.getElementById("ethicsBtn").addEventListener("click", runEthicalFilter);
+        document.getElementById("feedbackBtn").addEventListener("click", submitFeedbackLoop);
+        document.getElementById("feedbackSummaryBtn").addEventListener("click", loadFeedbackSummary);
 
         document.querySelectorAll(".menu-btn[data-page]").forEach(btn => {
             btn.addEventListener("click", () => switchPage(btn.dataset.page));
@@ -1664,6 +2092,7 @@
         updateMetrics();
         loadMemoryHints();
         refreshReasoningNodes();
+        loadFeedbackSummary();
         switchPage("dashboard");
     </script>
 </body>
