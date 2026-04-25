@@ -16,5 +16,35 @@
     "event2": "Project Deadline",
     "priority": "event2",
     "email": "Client complaining about delay"
+  },
+  {
+    "event1": "Drive parents to airport",
+    "event2": "Investor prep meeting",
+    "priority": "event1",
+    "email": "Investor asks for revised deck tonight"
+  },
+  {
+    "event1": "Grocery shopping for family dinner",
+    "event2": "Urgent production incident call",
+    "priority": "event2",
+    "email": "Ops team reports outage and asks for immediate join"
+  },
+  {
+    "event1": "Reply to difficult customer complaint email",
+    "event2": "Child school event",
+    "priority": "event2",
+    "email": "Customer email is aggressive and asks for refund now"
+  },
+  {
+    "event1": "Plan dinner reservation and rides",
+    "event2": "Late-night architecture review",
+    "priority": "event1",
+    "email": "Manager says review can be moved if needed"
+  },
+  {
+    "event1": "Weekend shopping run",
+    "event2": "Client escalation follow-up",
+    "priority": "event2",
+    "email": "Client threatens churn unless action plan shared today"
   }
 ]
