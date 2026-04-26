@@ -40,14 +40,25 @@
             padding: 14px 18px;
         }
 
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background: radial-gradient(700px 300px at 50% -10%, rgba(115, 156, 255, 0.12), transparent 65%);
+            z-index: 0;
+        }
+
         .app-shell {
             display: grid;
             grid-template-columns: 258px 1fr;
-            gap: 10px;
+            gap: 12px;
             min-height: calc(100vh - 28px);
             width: 100%;
             max-width: 1600px;
             margin: 0 auto;
+            position: relative;
+            z-index: 1;
         }
 
         .sidebar {
@@ -61,8 +72,9 @@
             display: flex;
             flex-direction: column;
             gap: 12px;
-            box-shadow: inset 0 0 0 1px rgba(102, 128, 223, 0.08), 0 10px 22px rgba(0, 0, 0, 0.4);
+            box-shadow: inset 0 0 0 1px rgba(102, 128, 223, 0.08), 0 12px 24px rgba(0, 0, 0, 0.44);
             overflow-y: auto;
+            backdrop-filter: blur(6px);
         }
 
         .brand {
@@ -110,7 +122,7 @@
             text-align: left;
             font-size: 14.5px;
             font-weight: 600;
-            transition: 0.2s ease;
+            transition: 0.22s ease;
             display: flex;
             align-items: center;
             gap: 10px;
@@ -129,6 +141,7 @@
             border-color: rgba(123, 77, 255, 0.35);
             background: rgba(123, 77, 255, 0.12);
             color: var(--text-1);
+            transform: translateX(2px);
         }
 
         .menu-btn.active {
@@ -285,8 +298,9 @@
             display: flex;
             flex-direction: column;
             gap: 12px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 14px 30px rgba(0, 0, 0, 0.36);
             position: relative;
+            backdrop-filter: blur(6px);
         }
 
         .topbar {
@@ -327,6 +341,12 @@
             display: flex;
             flex-direction: column;
             justify-content: center;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .chip:hover {
+            border-color: rgba(116, 168, 255, 0.42);
+            box-shadow: 0 0 0 1px rgba(116, 168, 255, 0.12), 0 8px 18px rgba(8, 15, 42, 0.35);
         }
 
         .chip-label {
@@ -376,6 +396,14 @@
             border-radius: 11px;
             padding: 13px;
             box-shadow: inset 0 0 0 1px rgba(156, 166, 255, 0.04);
+            backdrop-filter: blur(4px);
+            transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(130, 156, 255, 0.36);
+            box-shadow: inset 0 0 0 1px rgba(156, 166, 255, 0.07), 0 10px 24px rgba(8, 12, 32, 0.35);
         }
 
         .resolve-card {
@@ -424,6 +452,14 @@
             padding: 11px;
             font-size: 14px;
             outline: none;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .field input:focus,
+        .field textarea:focus,
+        .field select:focus {
+            border-color: rgba(112, 165, 255, 0.55);
+            box-shadow: 0 0 0 2px rgba(112, 165, 255, 0.16);
         }
 
         .field textarea {
@@ -441,10 +477,14 @@
             padding: 11px 13px;
             cursor: pointer;
             width: 100%;
+            box-shadow: 0 10px 22px rgba(98, 62, 255, 0.28);
+            transition: transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease;
         }
 
         .btn-primary:hover {
             filter: brightness(1.06);
+            transform: translateY(-1px);
+            box-shadow: 0 12px 24px rgba(98, 62, 255, 0.36);
         }
 
         .reasoning-wrap {
@@ -939,12 +979,29 @@
             color: #a9b6e8;
         }
 
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(13, 19, 46, 0.6);
+            border-radius: 999px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, rgba(109, 142, 255, 0.7), rgba(128, 85, 255, 0.72));
+            border-radius: 999px;
+        }
+
         .cap-item {
             display: flex;
-            gap: 9px;
-            margin-bottom: 10px;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 11px;
             color: var(--text-2);
             font-size: 13px;
+            line-height: 1.25;
         }
 
         .cap-item span {
@@ -961,6 +1018,42 @@
             display: inline-block;
             margin-top: 1px;
             background: linear-gradient(140deg, rgba(31, 200, 255, 0.8), rgba(123, 77, 255, 0.8));
+        }
+
+        .cap-icon {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 0;
+            border: 1px solid rgba(142, 161, 255, 0.45);
+            box-shadow: 0 0 12px rgba(95, 119, 216, 0.28);
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+
+        .cap-glyph {
+            display: inline-block;
+            width: 100%;
+            text-align: center;
+            font-size: 13px;
+            line-height: 30px;
+            font-weight: 700;
+            transform: none;
+            font-family: "Segoe UI Symbol", "Inter", sans-serif;
+        }
+
+        .cap-icon-resolve { color: #ff8fcb; border-color: rgba(255, 143, 203, 0.55); background: rgba(74, 24, 56, 0.85); }
+        .cap-icon-delegate { color: #86ffcf; border-color: rgba(134, 255, 207, 0.55); background: rgba(14, 62, 50, 0.85); }
+        .cap-icon-email { color: #78d8ff; border-color: rgba(120, 216, 255, 0.55); background: rgba(16, 48, 74, 0.85); }
+        .cap-icon-predict { color: #a89aff; border-color: rgba(168, 154, 255, 0.55); background: rgba(36, 28, 76, 0.85); }
+        .cap-icon-memory { color: #ffc778; border-color: rgba(255, 199, 120, 0.55); background: rgba(79, 44, 16, 0.85); }
+
+        .cap-copy {
+            flex: 1;
+            min-width: 0;
         }
 
         .resolution-list .res-item {
@@ -1114,7 +1207,7 @@
             margin-top: 10px;
             border: 1px solid rgba(122, 146, 255, 0.24);
             border-radius: 10px;
-            background: rgba(8, 12, 30, 0.9);
+            background: linear-gradient(180deg, rgba(8, 12, 30, 0.94), rgba(9, 14, 36, 0.88));
             color: var(--text-2);
             padding: 10px;
             font-size: 13px;
@@ -1122,6 +1215,7 @@
             max-height: 112px;
             overflow: auto;
             white-space: pre-wrap;
+            box-shadow: inset 0 0 0 1px rgba(117, 134, 224, 0.08);
         }
 
         .output-area.compact {
@@ -1250,7 +1344,7 @@
                 <div class="status-row">
                     <div class="chip chip-about">
                         <div class="chip-label">About</div>
-                        <div class="chip-value">AetherMind is an AI conflict-resolution agent for personal tasks, communication, and smart decisions.</div>
+                        <div class="chip-value">AetherMind is an adaptive AI agent that resolves personal workflow conflicts through clear communication, ethical reasoning, and smart decisions.</div>
                     </div>
                     <div class="chip">
                         <div class="chip-label">Agent Status</div>
@@ -1414,11 +1508,11 @@
             <section class="grid-bottom">
                 <article class="card">
                     <div class="title-row"><h3>Agent Capabilities</h3></div>
-                    <div class="cap-item"><i class="dot-icon"></i><div><span>Conflict Resolution</span>Resolve complex scheduling conflicts</div></div>
-                    <div class="cap-item"><i class="dot-icon"></i><div><span>Smart Delegation</span>Find and assign the right person</div></div>
-                    <div class="cap-item"><i class="dot-icon"></i><div><span>Email Generation</span>Context-aware email drafting</div></div>
-                    <div class="cap-item"><i class="dot-icon"></i><div><span>Predictive Scheduling</span>Predict and prevent future conflicts</div></div>
-                    <div class="cap-item"><i class="dot-icon"></i><div><span>Memory & Personalization</span>Learns your preferences over time</div></div>
+                    <div class="cap-item"><span class="cap-icon cap-icon-resolve"><span class="cap-glyph">◇</span></span><div class="cap-copy"><span>Conflict Resolution</span>Resolve complex scheduling conflicts</div></div>
+                    <div class="cap-item"><span class="cap-icon cap-icon-delegate"><span class="cap-glyph">⎇</span></span><div class="cap-copy"><span>Smart Delegation</span>Find and assign the right person</div></div>
+                    <div class="cap-item"><span class="cap-icon cap-icon-email"><span class="cap-glyph">✉</span></span><div class="cap-copy"><span>Email Generation</span>Context-aware email drafting</div></div>
+                    <div class="cap-item"><span class="cap-icon cap-icon-predict"><span class="cap-glyph">◈</span></span><div class="cap-copy"><span>Predictive Scheduling</span>Predict and prevent future conflicts</div></div>
+                    <div class="cap-item"><span class="cap-icon cap-icon-memory"><span class="cap-glyph">◎</span></span><div class="cap-copy"><span>Memory & Personalization</span>Learns your preferences over time</div></div>
                 </article>
 
                 <article class="card">
