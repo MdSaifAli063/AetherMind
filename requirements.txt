@@ -1,7 +1,7 @@
 gradio
 transformers
 torch
-trl
+trl==0.8.6
 openenv
 flask
 flask-cors
