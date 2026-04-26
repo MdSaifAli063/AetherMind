@@ -180,6 +180,119 @@ def test_frontend_integration():
         except Exception as e:
             print(f"    [FAIL] Error: {e}")
         
+        # Test 11: Judging Readiness
+        print("\n[11] Judging Readiness API")
+        total_tests += 1
+        try:
+            resp = client.get("/api/judging/readiness")
+            data = resp.get_json() or {}
+            r = data.get("readiness") or {}
+            if resp.status_code == 200 and "openenv_usage" in r and "reward_summary" in data:
+                print("    [OK] /api/judging/readiness -> 200 OK")
+                success_count += 1
+            else:
+                print(f"    [FAIL] /api/judging/readiness -> {resp.status_code}")
+        except Exception as e:
+            print(f"    [FAIL] Error: {e}")
+        
+        # Test 12: Agent Capabilities
+        print("\n[12] Agent Capabilities API")
+        total_tests += 1
+        try:
+            resp = client.get("/api/agent/capabilities")
+            data = resp.get_json() or {}
+            if resp.status_code == 200 and "core_modules" in data and "advanced_features" in data:
+                print("    [OK] /api/agent/capabilities -> 200 OK")
+                success_count += 1
+            else:
+                print(f"    [FAIL] /api/agent/capabilities -> {resp.status_code}")
+        except Exception as e:
+            print(f"    [FAIL] Error: {e}")
+        
+        # Test 13: What-If Simulate
+        print("\n[13] What-If Simulation API")
+        total_tests += 1
+        try:
+            payload = {
+                "scenario": "Reschedule a meeting with two conflicting requests",
+                "options": ["Postpone to tomorrow", "Shorten the slot", "Delegate to colleague"]
+            }
+            resp = client.post("/api/whatif-simulate", json=payload, content_type="application/json")
+            data = resp.get_json() or {}
+            if resp.status_code == 200 and "ranked_outcomes" in data:
+                print("    [OK] /api/whatif-simulate -> 200 OK")
+                success_count += 1
+            else:
+                print(f"    [FAIL] /api/whatif-simulate -> {resp.status_code} {data}")
+        except Exception as e:
+            print(f"    [FAIL] Error: {e}")
+        
+        # Test 14: Communication Script
+        print("\n[14] Communication Script API")
+        total_tests += 1
+        try:
+            payload = {
+                "audience": "manager",
+                "objective": "Request deadline extension",
+                "context": "Project slipped due to illness",
+            }
+            resp = client.post("/api/communication-script", json=payload, content_type="application/json")
+            data = resp.get_json() or {}
+            if resp.status_code == 200 and "script" in data:
+                print("    [OK] /api/communication-script -> 200 OK")
+                success_count += 1
+            else:
+                print(f"    [FAIL] /api/communication-script -> {resp.status_code}")
+        except Exception as e:
+            print(f"    [FAIL] Error: {e}")
+        
+        # Test 15: Ethical Filter
+        print("\n[15] Ethical Filter API")
+        total_tests += 1
+        try:
+            payload = {"decision": "Decline a low-priority meeting", "context": "Time conflict with family commitment"}
+            resp = client.post("/api/ethical-filter", json=payload, content_type="application/json")
+            if resp.status_code == 200:
+                print("    [OK] /api/ethical-filter -> 200 OK")
+                success_count += 1
+            else:
+                print(f"    [FAIL] /api/ethical-filter -> {resp.status_code}")
+        except Exception as e:
+            print(f"    [FAIL] Error: {e}")
+        
+        # Test 16: Feedback Loop
+        print("\n[16] Feedback Loop API")
+        total_tests += 1
+        try:
+            payload = {
+                "action": "reschedule",
+                "outcome": "stakeholder agreed",
+                "feedback": "Smooth outcome",
+                "rating": 0.8
+            }
+            resp = client.post("/api/feedback-loop", json=payload, content_type="application/json")
+            if resp.status_code == 200:
+                print("    [OK] /api/feedback-loop -> 200 OK")
+                success_count += 1
+            else:
+                print(f"    [FAIL] /api/feedback-loop -> {resp.status_code}")
+        except Exception as e:
+            print(f"    [FAIL] Error: {e}")
+        
+        # Test 17: Feedback Loop Summary
+        print("\n[17] Feedback Loop Summary API")
+        total_tests += 1
+        try:
+            resp = client.get("/api/feedback-loop/summary")
+            data = resp.get_json() or {}
+            if resp.status_code == 200 and "entries" in data:
+                print("    [OK] /api/feedback-loop/summary -> 200 OK")
+                success_count += 1
+            else:
+                print(f"    [FAIL] /api/feedback-loop/summary -> {resp.status_code}")
+        except Exception as e:
+            print(f"    [FAIL] Error: {e}")
+        
         # Summary
         print("\n" + "=" * 70)
         print(f"RESULTS: {success_count}/{total_tests} tests passed")

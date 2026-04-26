@@ -57,3 +57,12 @@ This document maps the project to each official judging requirement and criterio
 2. Deploy app/environment to Hugging Face Spaces.
 3. Paste those final public links in `README.md` and `SUBMISSION_CHECKLIST.md`.
 
+## Optional: reflecting publish status in the app
+
+The API `GET /api/judging/readiness` reports whether external requirements are “done.” By default, mini-blog/Space show as not published until you set environment variables in your Space (or local run):
+
+- **Mini-blog or video:** `JUDGING_MINI_BLOG_PUBLISHED=1` or set `JUDGING_MINI_BLOG_URL` / `JUDGING_YOUTUBE_URL` to your public link.
+- **HF Space:** `JUDGING_HF_SPACE_HOSTED=1` or set `JUDGING_HF_SPACE_URL` (or `HUGGINGFACE_SPACE_URL`) to your Space URL.
+
+After deployment, the readiness endpoint and UI panels that use it can show complete criteria without hand-editing code.
+

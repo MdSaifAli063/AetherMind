@@ -1,7 +1,9 @@
 import os
+import re
 import sys
 import json
 import csv
+import threading
 from datetime import datetime
 from collections import defaultdict
 
@@ -51,10 +53,11 @@ _episode_history = []
 # Model
 # ----------------------------------
 
-MODEL_NAME = os.getenv("LIFEOS_MODEL_NAME", "google/flan-t5-base")
+MODEL_NAME = os.getenv("LIFEOS_MODEL_NAME", "google/flan-t5-large")
 _tokenizer = None
 _model = None
 _model_load_error = None
+_model_lock = threading.Lock()
 _history = []
 _reward_cache = None
 _feedback_log = []
@@ -69,18 +72,27 @@ def _load_reward_artifacts():
     outputs_dir = os.path.join(PROJECT_ROOT, "training_outputs")
     csv_path = os.path.join(outputs_dir, "reward_log.csv")
     json_path = os.path.join(outputs_dir, "reward_log.json")
+    colab_path = os.path.join(outputs_dir, "reward_log_colab.json")
     rows = []
 
-    if os.path.exists(json_path):
+    def _load_json_list(path):
+        out = []
         try:
-            with open(json_path, "r", encoding="utf-8") as f:
+            with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             if isinstance(data, list):
                 for item in data:
                     if isinstance(item, dict):
-                        rows.append(item)
+                        out.append(item)
         except Exception:
-            rows = []
+            return []
+        return out
+
+    if os.path.exists(json_path):
+        rows = _load_json_list(json_path)
+
+    if not rows and os.path.exists(colab_path):
+        rows = _load_json_list(colab_path)
 
     if not rows and os.path.exists(csv_path):
         try:
@@ -134,25 +146,40 @@ def _reward_summary(rows):
 
 
 def get_model():
+    """Load flan-t5 once. Thread-safe: concurrent /resolve + /rewrite could otherwise load twice and OOM/crash."""
     global _tokenizer, _model, _model_load_error
 
-    if _tokenizer is None or _model is None:
-        # Lazy import to avoid torch/sympy conflicts at startup
+    if _tokenizer is not None and _model is not None:
+        return _tokenizer, _model
+
+    with _model_lock:
+        if _tokenizer is not None and _model is not None:
+            return _tokenizer, _model
+
         _lazy_import_transformers()
-        
+
         if AutoTokenizer is None or AutoModelForSeq2SeqLM is None:
             _model_load_error = "transformers not available (torch/sympy conflict)"
             return None, None
-            
+
         try:
             print(f"Loading model: {MODEL_NAME}")
             _tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-            _model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_NAME)
+            try:
+                _model = AutoModelForSeq2SeqLM.from_pretrained(
+                    MODEL_NAME,
+                    low_cpu_mem_usage=True,
+                )
+            except TypeError:
+                _model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_NAME)
+            _model.eval()
             _model_load_error = None
             print("Model Ready.")
         except Exception as exc:
             _model_load_error = str(exc)
             print(f"Model load failed: {_model_load_error}")
+            _tokenizer = None
+            _model = None
             return None, None
 
     return _tokenizer, _model
@@ -169,7 +196,11 @@ def detect_emotion(text):
     ]
     stress_words = [
         "urgent", "asap", "deadline", "overwhelmed", "pressure",
-        "stressed", "panic", "late", "blocked", "rush"
+        "stressed", "panic", "late", "blocked", "rush", "exhausted", "tired", "burnout"
+    ]
+    sad_words = [
+        "sad", "lonely", "hurt", "disappointed", "hopeless", "crying",
+        "grief", "grieving", "unloved", "rejected", "empty"
     ]
     positive_words = [
         "thanks", "appreciate", "great", "happy", "glad",
@@ -178,102 +209,284 @@ def detect_emotion(text):
 
     anger_score = sum(1 for word in anger_words if word in text_lower)
     stress_score = sum(1 for word in stress_words if word in text_lower)
+    sad_score = sum(1 for word in sad_words if word in text_lower)
     positive_score = sum(1 for word in positive_words if word in text_lower)
 
     if anger_score >= 2:
         return "angry"
     if stress_score >= 2:
         return "stressed"
+    if sad_score >= 2:
+        return "sad"
     if anger_score == 1:
         return "frustrated"
+    if sad_score >= 1 and anger_score < 1 and stress_score < 2:
+        return "sad"
     if positive_score >= 2:
         return "positive"
     return "neutral"
 
 
-def run_generation(prompt, max_new_tokens=140, llm_level="advanced"):
+def run_generation(prompt, max_new_tokens=140, llm_level="high"):
     tokenizer, model = get_model()
     if tokenizer is None or model is None:
         return None
 
-    generation_cfg = {
-        "max_new_tokens": max_new_tokens,
-        "do_sample": llm_level == "advanced",
-        "temperature": 0.7 if llm_level == "advanced" else 0.2,
-        "top_p": 0.92 if llm_level == "advanced" else 1.0,
-        "no_repeat_ngram_size": 3,
-        "repetition_penalty": 1.35
-    }
+    level = (llm_level or "advanced").strip().lower()
+    if level == "high":
+        generation_cfg = {
+            "max_new_tokens": max_new_tokens,
+            "do_sample": False,
+            "temperature": 0.2,
+            "top_p": 1.0,
+            "no_repeat_ngram_size": 3,
+            "repetition_penalty": 1.35,
+        }
+    elif level == "advanced":
+        generation_cfg = {
+            "max_new_tokens": max_new_tokens,
+            "do_sample": True,
+            "temperature": 0.7,
+            "top_p": 0.92,
+            "no_repeat_ngram_size": 3,
+            "repetition_penalty": 1.35,
+        }
+    else:
+        # standard, basic, fast
+        generation_cfg = {
+            "max_new_tokens": max_new_tokens,
+            "do_sample": False,
+            "temperature": 0.2,
+            "top_p": 1.0,
+            "no_repeat_ngram_size": 3,
+            "repetition_penalty": 1.35,
+        }
 
     inputs = tokenizer(
         prompt,
         return_tensors="pt",
         truncation=True,
-        max_length=768
+        max_length=640
     )
 
     outputs = model.generate(**inputs, **generation_cfg)
-    return tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
+    # Encoder–decoder (e.g. flan-t5): `outputs` includes the prompt. Decoding the full
+    # string makes `str.find("Decision:")` match placeholder lines in our own prompt.
+    input_len = int(inputs["input_ids"].shape[1])
+    seq = outputs[0]
+    if int(seq.shape[0]) > input_len:
+        gen_only = seq[input_len:]
+        return tokenizer.decode(gen_only, skip_special_tokens=True).strip()
+    return tokenizer.decode(seq, skip_special_tokens=True).strip()
 
 
-def rewrite_calm_message(message, llm_level="advanced"):
+def _coerce_llm_level(value, default="standard"):
+    v = str(value if value is not None else default).strip().lower() or default
+    return v if v in ("standard", "advanced", "high") else default
+
+
+def _is_fast_level(llm_level: str) -> bool:
+    return str(llm_level or "").strip().lower() == "standard"
+
+
+def _evidence_phrase_for_emotion(user_text: str, emotion_label: str) -> str:
+    """One neutral sentence: what in the text supports the label (no quotes, no requests)."""
+    low = (user_text or "").lower()
+    if emotion_label in ("angry", "frustrated"):
+        if any(
+            w in low
+            for w in (
+                "unfair",
+                "blame",
+                "hate",
+                "angry",
+                "furious",
+                "ridiculous",
+                "stupid",
+                "frustrat",
+            )
+        ):
+            return "The wording carries challenge, blame, or sharp dissatisfaction, which supports a frustrated or anger-leaning read."
+        return "The overall intensity and opposition in the phrasing support a frustration- or anger-class reading."
+    if emotion_label == "stressed":
+        if any(
+            w in low
+            for w in (
+                "deadline",
+                "asap",
+                "urgent",
+                "overwhelm",
+                "stress",
+                "pressure",
+                "rush",
+                "panic",
+            )
+        ):
+            return "Mentions of time pressure, overload, or urgency in the statement align with a stressed classification."
+        return "The statement reads as time- or load-related strain rather than a calm, settled tone."
+    if emotion_label == "sad":
+        return "Themes of loss, hurt, or low energy in the phrasing support a sad-leaning read."
+    if emotion_label == "positive":
+        if any(
+            w in low
+            for w in (
+                "thanks",
+                "great",
+                "happy",
+                "glad",
+                "appreciate",
+                "excited",
+            )
+        ):
+            return "Positive or appreciative language appears, supporting an upbeat read."
+        return "The tone is relatively steady or slightly positive rather than agitated or dark."
+    return "The diction is fairly neutral; the label is a mild read based on the statement as a whole."
+
+
+def refine_emotion_with_model(user_text: str, rule_label: str, llm_level: str) -> str:
+    """Optional second opinion using only the same statement; falls back to rule_label."""
+    if (llm_level or "").strip().lower() != "high":
+        return rule_label
+    tokenizer, model = get_model()
+    if tokenizer is None or model is None:
+        return rule_label
+    allowed = (
+        "angry",
+        "frustrated",
+        "stressed",
+        "sad",
+        "positive",
+        "neutral",
+    )
+    prompt = f"""
+Classify the emotional tone of the user statement. Use EXACTLY one word from this list:
+{", ".join(allowed)}
+Rules: Decide only from the text below. Do not ask questions. Do not request more information.
+Output format (single line):
+EMOTION: <one word from the list>
+
+User statement:
+{user_text}
+"""
+    out = run_generation(prompt, max_new_tokens=24, llm_level="high")
+    if not out:
+        return rule_label
+    for line in out.splitlines():
+        u = line.strip()
+        if u.upper().startswith("EMOTION:"):
+            word = u.split(":", 1)[1].strip().lower().rstrip(".,!\"'")
+            if word in allowed:
+                return word
+    low = out.lower()
+    for w in allowed:
+        if w in low.split() and len(w) > 2:
+            return w
+    return rule_label
+
+
+def build_emotion_guidance(user_text: str, emotion_label: str) -> str:
+    """Closed verdict: classification + in-statement support only. No extra prompts to the user."""
+    evidence = _evidence_phrase_for_emotion(user_text, emotion_label)
+    return (
+        f"Verdict: {emotion_label}.\n"
+        f"Basis (from this statement only): {evidence}\n"
+        f"Conclusion: The assigned label is decided from the provided text; no additional input is required."
+    )
+
+
+def rewrite_calm_message(message, llm_level="high"):
+    if _is_fast_level(llm_level):
+        cleaned = (message or "").replace("!", ".").replace("  ", " ").strip()
+        return (
+            "Tone: calm and respectful\n"
+            "Validation: I understand this feels important and stressful.\n"
+            "Rewritten: I want us to solve this clearly and respectfully. "
+            f"Could we align on one practical next step? {cleaned}"
+        )
     emotion = detect_emotion(message)
     prompt = f"""
-You are a communication coach.
-Rewrite the message to be calm, respectful, and professional.
-Keep the intent, remove aggression, and keep it concise.
+You are a kind, emotionally intelligent communication coach (similar to a supportive ChatGPT).
+First acknowledge the person's feelings in one short sentence, then help them say the same point calmly.
+
+Rules:
+- Show you understand (validation) before you advise.
+- Keep warmth and courtesy; no moralizing, no shaming.
+- Keep the same intent; remove attack language; be concise.
+- Suggest a clear next step in one line if natural.
 
 Return ONLY this format:
 Tone: ...
+Validation: (one line acknowledging their feelings)
 Rewritten: ...
 
 Detected emotion: {emotion}
 Original message: {message}
 """
 
-    result = run_generation(prompt, max_new_tokens=120, llm_level=llm_level)
+    result = run_generation(prompt, max_new_tokens=110, llm_level=llm_level)
     if result and "Rewritten:" in result:
-        return result[result.find("Tone:"):] if "Tone:" in result else result
+        if "Tone:" in result:
+            return result[result.find("Tone:") :].strip()
+        if "Validation:" in result:
+            return result[result.find("Validation:") :].strip()
+        return result[result.find("Rewritten:") :].strip()
 
     cleaned = (message or "").replace("!", ".").replace("  ", " ").strip()
     return (
-        "Tone: calm\n"
-        "Rewritten: I understand the urgency and would like to collaborate on a practical next step. "
-        f"{cleaned}"
+        "Tone: calm and respectful\n"
+        "Validation: It makes sense to feel strong about this, and I want to work with you, not against you.\n"
+        "Rewritten: I care about getting this right. Here is a calmer phrasing: "
+        f"Could we align on a practical next step? {cleaned}"
     )
 
 
-def mediate_conflict(side_a, side_b, shared_goal, llm_level="advanced"):
+def mediate_conflict(side_a, side_b, shared_goal, llm_level="high"):
+    if _is_fast_level(llm_level):
+        return (
+            "Summary: Both sides are trying to protect something important and the pressure is real.\n"
+            "Common Ground: You both want a result that works without damaging trust.\n"
+            "Mediation Plan:\n"
+            "1) State each side's key need in one sentence.\n"
+            "2) Choose one short trial plan for this week.\n"
+            "3) Set owner, deadline, and a quick check-in.\n"
+            "Suggested Message: I hear both concerns, and I care about a fair outcome. Can we test one plan this week and review together?"
+        )
     prompt = f"""
-You are a neutral AI mediator helping two people de-escalate conflict.
-Provide a balanced response with practical next steps.
+You are a warm, fair mediator (like a thoughtful human coach) helping two people feel heard and move forward.
+Acknowledge the feelings behind each side in one line each, without taking sides. Then de-escalate and give a clear plan.
+
+Rules:
+- Validate emotions before problem-solving. Use courteous, non-blaming language.
+- Name shared humanity (both want something reasonable) before tactics.
+- End with a suggested message the user could send that sounds caring and concrete.
 
 Respond ONLY in this format:
-Summary: ...
+Summary: (what each side is feeling/asking for, in empathetic terms)
 Common Ground: ...
 Mediation Plan:
 1) ...
 2) ...
 3) ...
-Suggested Message: ...
+Suggested Message: (short, kind, and actionable)
 
 Person A position: {side_a}
 Person B position: {side_b}
 Shared goal: {shared_goal}
 """
 
-    result = run_generation(prompt, max_new_tokens=180, llm_level=llm_level)
+    result = run_generation(prompt, max_new_tokens=140, llm_level=llm_level)
     if result and "Summary:" in result:
-        return result[result.find("Summary:"):]
+        return result[result.find("Summary:") :]
 
     return (
-        "Summary: Both sides are under pressure and need clarity.\n"
-        "Common Ground: They both care about successful outcomes.\n"
+        "Summary: Both people sound stretched—each is trying to protect something important, and that stress is valid.\n"
+        "Common Ground: You both want a workable outcome you can stand behind, without burning trust.\n"
         "Mediation Plan:\n"
-        "1) Align on immediate priorities.\n"
-        "2) Separate urgent and non-urgent tasks.\n"
-        "3) Agree on one clear owner and deadline.\n"
-        "Suggested Message: Let us reset expectations and agree on the next concrete step today."
+        "1) Start by naming what you appreciate in the other person’s goal, then your constraint—curiosity over criticism.\n"
+        "2) Agree on one small experiment (time-boxed) instead of a permanent winner-takes-all choice.\n"
+        "3) Put one clear owner, date, and check-in on the calendar so no one is left guessing.\n"
+        "Suggested Message: I know we are both under pressure. I want a solution that works for both of us—could we look at "
+        f"{shared_goal} and pick one next step we can try this week, then revisit?"
     )
 
 
@@ -303,18 +516,24 @@ def run_whatif_simulation(scenario, options):
         else:
             recommendation = "high_caution"
 
-        results.append({
-            "option_id": idx,
-            "option": option_text,
-            "risk_pct": risk_pct,
-            "benefit_pct": benefit_pct,
-            "net_score": net_score,
-            "recommendation": recommendation,
-            "impact_note": (
-                f"Scenario context: {scenario}. "
-                f"Option favors {('execution speed' if benefit_score >= risk_score else 'risk containment')}."
-            )
-        })
+        if benefit_score >= risk_score:
+            feel = "may feel more relieving if you need momentum, but still watch for fatigue or rushed commitments"
+        else:
+            feel = "may feel safer if the stakes are high, though it can feel slower to others—communicate the why"
+
+        results.append(
+            {
+                "option_id": idx,
+                "option": option_text,
+                "risk_pct": risk_pct,
+                "benefit_pct": benefit_pct,
+                "net_score": net_score,
+                "recommendation": recommendation,
+                "impact_note": (
+                    f"Given “{scenario[:120]}{'...' if len(scenario) > 120 else ''}”, this path {feel}."
+                ),
+            }
+        )
 
     ranked = sorted(results, key=lambda item: item["net_score"], reverse=True)
     return {
@@ -325,10 +544,21 @@ def run_whatif_simulation(scenario, options):
     }
 
 
-def generate_communication_script(audience, objective, tone, context, llm_level="advanced"):
+def generate_communication_script(audience, objective, tone, context, llm_level="high"):
+    if _is_fast_level(llm_level):
+        return (
+            "Opening: Thank you for taking a moment to talk — I value our trust.\n"
+            "Core Message:\n"
+            f"1) Objective: {objective}\n"
+            f"2) Context: {context}\n"
+            f"3) Next step: agree on one clear action in a {tone} tone.\n"
+            "Close: I appreciate your support and want a solution that works for both of us.\n"
+            f"Fallback One-Liner: Can we quickly align on {objective}?"
+        )
     prompt = f"""
-You are an expert communication strategist.
-Generate a concise communication script.
+You are an empathetic communication strategist. Write a script the speaker can say and feel good about: caring,
+clear, and respectful (similar to how ChatGPT helps with difficult conversations). Acknowledge the emotional weight
+of the topic in the opening without drama.
 
 Return ONLY this format:
 Opening: ...
@@ -344,18 +574,18 @@ Objective: {objective}
 Tone: {tone}
 Context: {context}
 """
-    generated = run_generation(prompt, max_new_tokens=170, llm_level=llm_level)
+    generated = run_generation(prompt, max_new_tokens=130, llm_level=llm_level)
     if generated and "Opening:" in generated:
-        return generated[generated.find("Opening:"):].strip()
+        return generated[generated.find("Opening:") :].strip()
 
     return (
-        f"Opening: Hi {audience}, I want to align quickly on this.\n"
+        f"Opening: Hi, thank you for making time—I know this is not an easy topic, and I am grateful for your openness.\n"
         "Core Message:\n"
-        f"1) Objective: {objective}\n"
-        f"2) Context: {context}\n"
-        "3) Proposed next step: agree on owner, deadline, and check-in.\n"
-        f"Close: I appreciate your support and feedback. Tone target: {tone}.\n"
-        f"Fallback One-Liner: Sharing a quick update to align on {objective}."
+        f"1) What I need to share: {objective}\n"
+        f"2) What is going on for me: {context}\n"
+        f"3) What I am hoping for next: a small, specific step we can both live with, in a {tone} tone.\n"
+        f"Close: I care about our working relationship, and I would rather be honest now than let resentment build. Thank you for hearing me out.\n"
+        f"Fallback One-Liner: I wanted to be direct with you about {objective}—do you have a few minutes to align?"
     )
 
 
@@ -392,9 +622,9 @@ def ethical_decision_assessment(decision, context):
         verdict = "high_ethical_risk"
 
     suggestions = [
-        "Document the reasoning and trade-offs before execution.",
-        "Notify affected stakeholders with clear rationale.",
-        "Add a rollback or corrective action if unintended harm appears."
+        "Write down the trade-offs the way you would explain them to a friend you respect—clarity and compassion together.",
+        "Tell the people who need to know what you are doing and why, in plain language, before they hear it second-hand.",
+        "Keep a kind exit path: if something goes wrong, decide in advance how you will repair it and who you will check in with.",
     ]
     return {
         "decision": decision,
@@ -422,13 +652,18 @@ def update_feedback_loop(action, outcome, rating, feedback_text):
 
     avg_rating = round(sum(item["rating"] for item in _feedback_log) / len(_feedback_log), 3)
     trend = "improving" if avg_rating >= 0.5 else ("stable" if avg_rating >= -0.25 else "declining")
-    reinforcement_plan = (
-        "Increase policy weight for this action pattern."
-        if rating_value >= 1
-        else "Keep current policy and gather more evidence."
-        if rating_value >= 0
-        else "Reduce confidence in this action and require extra checks."
-    )
+    if rating_value >= 1:
+        reinforcement_plan = (
+            "This felt successful—lean into a similar pattern next time, and notice what you did right; that builds confidence."
+        )
+    elif rating_value >= 0:
+        reinforcement_plan = (
+            "This was mixed, which is still useful data. Keep experimenting with small changes rather than all-or-nothing."
+        )
+    else:
+        reinforcement_plan = (
+            "It is okay that this was hard—treat it as a signal to add support, checks, or a gentler plan before the next try."
+        )
     return {
         "saved": True,
         "entries": len(_feedback_log),
@@ -443,76 +678,143 @@ def update_feedback_loop(action, outcome, rating, feedback_text):
 # AI Logic
 # ----------------------------------
 
+def _normalize_solve_headers(text: str) -> str:
+    """Map 'Decision —' / 'Reason –' style lines to 'Decision:' for consistent display."""
+    if not text:
+        return text
+    t = text.replace("\r\n", "\n")
+    labels = (
+        "Decision",
+        "Reason",
+        "Delegation",
+        "Mediation",
+        "Email",
+        "Risk Level",
+        "Confidence",
+    )
+    for lab in labels:
+        pat = rf"(?im)^\s*\**{re.escape(lab)}\**\s*[—–:]\s*"
+        t = re.sub(pat, f"{lab}: ", t)
+    return t
+
+
+def _solve_output_usable(text: str) -> bool:
+    """Reject model echoes of prompt templates or empty shells."""
+    if not text or len(str(text).strip()) < 50:
+        return False
+    t = str(text).strip()
+    low = t.lower()
+    if "reason: (include" in low or "include one line of emotional" in low:
+        return False
+    if "practical trade-off)." in t and "emotional validation" in low:
+        return False
+    for line in t.splitlines():
+        line_st = line.strip()
+        if not line_st:
+            continue
+        if line_st.lower().startswith("decision:"):
+            rest = line_st.split(":", 1)[-1].strip()
+            if not rest or rest in (".", "...", "…") or rest.startswith("..."):
+                return False
+            if len(rest) < 4:
+                return False
+            break
+    else:
+        return False
+    return True
+
+
+def _fallback_solve_text(
+    event1: str,
+    event2: str,
+    priority: str,
+    email: str,
+    detected_emotion: str,
+    model_missing: bool,
+) -> str:
+    """Empathetic structured resolution when the model is off or output is unusable."""
+    e1 = (event1 or "").strip() or "Task A"
+    e2 = (event2 or "").strip() or "Task B"
+    p = (priority or "event1").strip().lower()
+    if p == "event2":
+        first_name, second_name = e2, e1
+    else:
+        first_name, second_name = e1, e2
+    ctx = (email or "").strip() or "balancing responsibilities."
+    reason_extra = (
+        "The language model did not return a full answer, so this is a structured recommendation."
+        if model_missing
+        else "This keeps both priorities visible while honoring the choice you set."
+    )
+    return f"""Decision: Put "{first_name}" first this week, and plan a respectful adjustment for "{second_name}".
+
+Reason: It is valid to feel pulled between these ({detected_emotion} tone in what you shared). {reason_extra}
+Holding {ctx[:220]}{"…" if len(ctx) > 220 else ""}
+
+Delegation: Update the calendar for "{second_name}" with at least one concrete alternative time, and give people as
+much notice as you can. Own the change briefly and clearly—no over-apologizing, just honesty.
+
+Mediation: If anyone is disappointed, name that you value them before you restate the constraint; people hear care
+first, logistics second.
+
+Email:
+Hi — I have a real conflict between two things I care about, and I want to be fair to everyone.
+I need to prioritize {first_name} for now. For {second_name}, could we shift to [your alternative slot]?
+I am sorry for the change and I appreciate your understanding.
+
+Risk Level: low
+
+Confidence: high"""
+
+
 def solve_conflict(
     event1,
     event2,
     priority,
     email,
-    llm_level="advanced"
+    llm_level="high",
 ):
     detected_emotion = detect_emotion(email)
+    if _is_fast_level(llm_level):
+        return _fallback_solve_text(event1, event2, priority, email, detected_emotion, model_missing=False)
 
-    prompt=f"""
-You are an executive assistant.
-Think with high-level reasoning, risk awareness, and emotional intelligence.
+    prompt = f"""
+You are AetherMind, a kind life-operations coach. The user is torn between two commitments and may feel guilty or stressed.
+Write one complete answer in English. Use real sentences only—never output angle brackets, ellipses as placeholders, or the
+word "placeholder".
 
-Respond ONLY in this format:
+Task names to use verbatim: "{event1}" and "{event2}".
+Priority flag: {priority} (if it is event1, put the first task first; if event2, put the second task first).
+What the user wrote: {email}
+Emotional tone hint: {detected_emotion}
 
-Decision: ...
-Reason: ...
-Delegation: ...
-Mediation: ...
-Email: ...
-Risk Level: ...
-Confidence: ...
-
-Task A: {event1}
-Task B: {event2}
-Priority: {priority}
-Message: {email}
-Detected emotion: {detected_emotion}
+Structure your answer with these exact headers in order, each followed by a blank line or by text on the same line:
+Decision — one line stating which commitment comes first and why.
+Reason — two short paragraphs: validate feelings, then explain the trade-off using both task names.
+Delegation — who to notify and what calendar or scope change to make.
+Mediation — one empathetic line about keeping relationships steady.
+Email — a short warm message the user can send, with a clear reschedule or boundary request.
+Risk Level — one word: low, medium, or high.
+Confidence — one word: low, medium, or high.
 """
-    result = run_generation(prompt, max_new_tokens=170, llm_level=llm_level)
+    raw = run_generation(prompt, max_new_tokens=160, llm_level=llm_level)
+    result = (raw or "").strip()
+
     if not result:
-        return f"""
-Decision: Prioritize {priority}
+        return _fallback_solve_text(
+            event1, event2, priority, email, detected_emotion, model_missing=True
+        )
 
-Reason: I could not load the language model, so I am applying the selected priority directly.
-
-Delegation: Move the lower-priority event to the next available slot and notify attendees.
-
-Mediation: Keep both sides informed with respectful communication.
-
-Email:
-Sorry, I have a scheduling conflict.
-Can we move this to tomorrow?
-
-Risk Level: medium
-
-Confidence: medium
-"""
+    # Normalize "Decision —" or "**Decision**" to Decision: for display consistency
+    result = _normalize_solve_headers(result)
 
     if "Decision:" in result:
-        result=result[result.find("Decision:"):]
+        result = result[result.find("Decision:") :]
 
-    if "Decision:" not in result:
-        result=f"""
-Decision: Prioritize {priority}
-
-Reason: Higher priority commitment comes first.
-
-Delegation: Reschedule lower priority task.
-
-Mediation: Communicate trade-offs clearly and avoid blame.
-
-Email:
-Sorry, I have a scheduling conflict.
-Can we move this to tomorrow?
-
-Risk Level: low
-
-Confidence: medium
-"""
+    if not _solve_output_usable(result):
+        return _fallback_solve_text(
+            event1, event2, priority, email, detected_emotion, model_missing=False
+        )
 
     return result
 
@@ -1066,8 +1368,9 @@ min-height:68vh;
       <div>
         <div class="control-label">Model Level</div>
         <select id="llmLevel">
-          <option value="advanced" selected>Advanced</option>
-          <option value="standard">Standard</option>
+          <option value="high" selected>High (best quality)</option>
+          <option value="advanced">Advanced</option>
+          <option value="standard">Standard (fast)</option>
         </select>
       </div>
       <div class="mini-stats">
@@ -1259,7 +1562,7 @@ llm_level: llm
 };
 }
 if(currentAgent === "emotion"){
-return { endpoint: "/emotion", payload: { text: message } };
+return { endpoint: "/emotion", payload: { text: message, llm_level: llm } };
 }
 if(currentAgent === "rewrite"){
 return { endpoint: "/rewrite", payload: { text: message, llm_level: llm } };
@@ -1278,7 +1581,7 @@ llm_level: llm
 function formatResponse(data){
 if(data.result){ return data.result; }
 if(data.emotion){
-return `Emotion: ${data.emotion}\nConfidence: ${data.confidence}\nAdvice: ${data.guidance}`;
+return `Emotion: ${data.emotion}\nModel: ${data.model_tier || "standard"}\nConfidence: ${data.confidence}\n\n${data.guidance}`;
 }
 if(data.error){ return `Error: ${data.error}`; }
 return JSON.stringify(data, null, 2);
@@ -1380,7 +1683,7 @@ def resolve():
             }
         ), 400
 
-    llm_level = data.get("llm_level", "advanced")
+    llm_level = _coerce_llm_level(data.get("llm_level"), "standard")
 
     try:
         result=solve_conflict(
@@ -1421,23 +1724,26 @@ def emotion():
     if not text:
         return jsonify({"error": "text is required"}), 400
 
+    llm_level = _coerce_llm_level(data.get("llm_level"), "standard")
+
     emotion_label = detect_emotion(text)
-    confidence = "medium"
-    if emotion_label in ("angry", "stressed"):
+    emotion_label = refine_emotion_with_model(text, emotion_label, llm_level)
+    if emotion_label in ("angry", "stressed", "sad", "frustrated"):
         confidence = "high"
     elif emotion_label == "neutral":
         confidence = "low"
+    else:
+        confidence = "medium"
 
-    guidance = (
-        "Use short, respectful sentences and focus on one next action."
-        if emotion_label in ("angry", "frustrated", "stressed")
-        else "Maintain clarity and collaborative tone."
+    guidance = build_emotion_guidance(text, emotion_label)
+    return jsonify(
+        {
+            "emotion": emotion_label,
+            "confidence": confidence,
+            "guidance": guidance,
+            "model_tier": llm_level,
+        }
     )
-    return jsonify({
-        "emotion": emotion_label,
-        "confidence": confidence,
-        "guidance": guidance
-    })
 
 
 @app.route("/rewrite", methods=["POST"])
@@ -1447,7 +1753,7 @@ def rewrite():
     if not text:
         return jsonify({"error": "text or message is required"}), 400
 
-    llm_level = data.get("llm_level", "advanced")
+    llm_level = _coerce_llm_level(data.get("llm_level"), "standard")
     result = rewrite_calm_message(text, llm_level=llm_level)
     return jsonify({"result": result})
 
@@ -1464,7 +1770,7 @@ def mediate():
             {"error": "side_a, side_b, and shared_goal are required"}
         ), 400
 
-    llm_level = data.get("llm_level", "advanced")
+    llm_level = _coerce_llm_level(data.get("llm_level"), "standard")
     result = mediate_conflict(side_a, side_b, shared_goal, llm_level=llm_level)
     return jsonify({"result": result})
 
@@ -1513,6 +1819,12 @@ def favicon():
     return ("", 204)
 
 
+@app.route("/.well-known/appspecific/com.chrome.devtools.json")
+def chrome_devtools_wellknown():
+    # Chrome DevTools probes this URL; not used by AetherMind. Avoids 404 noise in server logs.
+    return ("", 204)
+
+
 @app.route("/api/rewards/summary", methods=["GET"])
 def api_rewards_summary():
     rows = _load_reward_artifacts()
@@ -1547,23 +1859,41 @@ def api_rewards_timeline():
     })
 
 
+def _env_truthy(name):
+    v = (os.getenv(name) or "").strip().lower()
+    return v in ("1", "true", "yes", "y")
+
+
+def _env_non_empty(*names):
+    for name in names:
+        if (os.getenv(name) or "").strip():
+            return True
+    return False
+
+
 @app.route("/api/judging/readiness", methods=["GET"])
 def api_judging_readiness():
     rows = _load_reward_artifacts()
     reward_data = _reward_summary(rows)
+    blog_ok = _env_truthy("JUDGING_MINI_BLOG_PUBLISHED") or _env_non_empty(
+        "JUDGING_MINI_BLOG_URL", "JUDGING_YOUTUBE_URL", "JUDGING_VIDEO_URL"
+    )
+    space_ok = _env_truthy("JUDGING_HF_SPACE_HOSTED") or _env_non_empty(
+        "JUDGING_HF_SPACE_URL", "SPACE_URL", "HUGGINGFACE_SPACE_URL"
+    )
     readiness = {
         "openenv_usage": True,
         "trl_colab_script": True,
         "reward_evidence_available": bool(reward_data.get("available")),
-        "mini_blog_or_video_published": False,
-        "hf_space_hosted": False
+        "mini_blog_or_video_published": blog_ok,
+        "hf_space_hosted": space_ok,
     }
     return jsonify({
         "readiness": readiness,
         "reward_summary": reward_data,
         "notes": [
-            "Publish mini-blog or <2 min video link to mark ready.",
-            "Host app on Hugging Face Spaces to complete minimum requirements."
+            "To mark mini-blog or video as ready, set JUDGING_MINI_BLOG_PUBLISHED=1 (or JUDGING_YOUTUBE_URL=... / JUDGING_MINI_BLOG_URL=...).",
+            "To mark HF Space as ready, set JUDGING_HF_SPACE_HOSTED=1 (or JUDGING_HF_SPACE_URL=...).",
         ]
     })
 
@@ -1584,6 +1914,10 @@ def api_agent_capabilities():
             "Emotion detection module",
             "Response rewriter",
             "Mediation mode",
+            "What-If Simulation",
+            "Communication script generator",
+            "Ethical decision filter",
+            "Feedback reinforcement loop",
             "Conflict progress dashboard",
             "Conflict history memory",
             "Predictive conflict handling",
@@ -1616,7 +1950,7 @@ def api_communication_script():
     objective = str(data.get("objective", "")).strip()
     tone = str(data.get("tone", "calm")).strip() or "calm"
     context = str(data.get("context", "")).strip()
-    llm_level = str(data.get("llm_level", "advanced")).strip() or "advanced"
+    llm_level = _coerce_llm_level(data.get("llm_level"), "standard")
     if not audience or not objective or not context:
         return jsonify({"error": "audience, objective, and context are required"}), 400
 
@@ -2085,11 +2419,12 @@ def api_episode_latest():
     return jsonify(_episode_history[-1])
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     debug_mode = os.getenv("FLASK_DEBUG", "0") == "1"
+    port = int(os.getenv("PORT", "5000"))
     app.run(
         debug=debug_mode,
         use_reloader=False,
         host="0.0.0.0",
-        port=5000
+        port=port
     )

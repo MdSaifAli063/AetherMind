@@ -22,6 +22,7 @@ If using Docker Space, this repo already includes:
 
 ## 3) Runtime Expectations
 
+- The Docker image sets `PORT=7860` and the app reads `PORT` (see `app/app.py`); this matches the default for Hugging Face Docker Spaces.
 - App serves at `/` and loads `frontend/frontend.html` via Flask.
 - Core APIs exposed:
   - `/resolve`
@@ -32,6 +33,7 @@ If using Docker Space, this repo already includes:
   - `/api/run-episode`
   - `/api/episodes`
   - `/api/episode/latest`
+- Additional feature APIs: `/api/whatif-simulate`, `/api/communication-script`, `/api/ethical-filter`, `/api/feedback-loop`, `/api/judging/readiness`, `/api/agent/capabilities`
 
 ## 4) Post-Deploy Validation
 
