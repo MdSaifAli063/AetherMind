@@ -1718,6 +1718,10 @@ def resolve():
     data = request.get_json(silent=True) or {}
     llm_level = _coerce_llm_level(data.get("llm_level"), "standard")
     email_text = str(data.get("email", "")).strip()
+    qa_mode = bool(data.get("qa_mode"))
+
+    if qa_mode and email_text:
+        return jsonify({"result": answer_general_question(email_text, llm_level=llm_level)})
 
     required_fields = ("event1", "event2", "priority", "email")
     missing_fields = [field for field in required_fields if not str(data.get(field, "")).strip()]
