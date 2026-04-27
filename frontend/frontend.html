@@ -2733,6 +2733,20 @@ Reschedule dinner by one hour with apology</textarea></div>
             return "No script returned.";
         }
 
+        function centerActiveMenuTab(pageName) {
+            if (!window.matchMedia("(max-width: 980px)").matches) return;
+            const menu = document.querySelector(".menu");
+            const active = document.querySelector(`.menu-btn[data-page="${pageName}"]`);
+            if (!menu || !active) return;
+
+            const targetLeft =
+                active.offsetLeft - (menu.clientWidth / 2) + (active.clientWidth / 2);
+            const maxLeft = Math.max(0, menu.scrollWidth - menu.clientWidth);
+            const nextLeft = Math.max(0, Math.min(targetLeft, maxLeft));
+
+            menu.scrollTo({ left: nextLeft, behavior: "smooth" });
+        }
+
         function switchPage(pageName) {
             document.querySelectorAll(".page-view").forEach(el => el.classList.remove("active"));
             const target = document.getElementById(`page-${pageName}`);
@@ -2743,6 +2757,8 @@ Reschedule dinner by one hour with apology</textarea></div>
             document.querySelectorAll(".menu-btn").forEach(btn => {
                 btn.classList.toggle("active", btn.dataset.page === pageName);
             });
+
+            requestAnimationFrame(() => centerActiveMenuTab(pageName));
         }
 
         async function checkHealth() {
