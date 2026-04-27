@@ -90,9 +90,9 @@ We track reward progression and behavioral quality per epoch (priority alignment
 ---
 
 ## 🌍 Live Demo Links
-- Hugging Face Space: **[Add Space URL]**
-- Colab Notebook: **[Add Colab URL]**
-- Mini-blog or <2 min video: **[Add link]**
+- Hugging Face Space: https://huggingface.co/spaces/mdsaifali063/AetherMind
+- Colab Notebook: https://colab.research.google.com/drive/134dwWK6lfU6EhYrUd5gTywHNlAQjt_n5?usp=sharing
+- Mini-blog: https://huggingface.co/spaces/mdsaifali063/AetherMind/blob/main/BLOG.md
 
 ---
 
